@@ -3,6 +3,8 @@ package com.ewoudje.asmetbox.parser.asm8051;
 import com.ewoudje.asm8051.Asm8051BaseListener;
 import com.ewoudje.asm8051.Asm8051BaseVisitor;
 import com.ewoudje.asm8051.Asm8051Parser;
+import com.ewoudje.asmetbox.parser.ContextCalculator;
+import com.ewoudje.asmetbox.parser.MissingContextException;
 import com.ewoudje.asmetbox.parser.RuntimeValue;
 import com.ewoudje.asmetbox.parser.Value;
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -19,6 +21,7 @@ public class Asm8051GenListener extends Asm8051BaseListener {
 	private final Asm8051Generator gen;
 	private final ValueCalculatorVisitor vCalc = new ValueCalculatorVisitor();
 	private final HashMap<String, BaseValue> labels = new HashMap<>();
+	private final Phase2Listener phase2 = new Phase2Listener();
 
 	public Asm8051GenListener(Asm8051Generator gen) {
 		this.gen = gen;
@@ -32,16 +35,11 @@ public class Asm8051GenListener extends Asm8051BaseListener {
 
 	@Override
 	public void exitInstruction(Asm8051Parser.InstructionContext ctx) {
-		Value<Asm8051GenListener> param1 = getValue(ctx.parameter(0));
-		Value<Asm8051GenListener> param2 = getValue(ctx.parameter(1));
-		Value<Asm8051GenListener> param3 = getValue(ctx.parameter(2));
-
-		gen.createInstruction(ctx.instr().getText().toLowerCase(), param1, param2, param3);
-
 		current_instr++;
 	}
 
 	private Value<Asm8051GenListener> getValue(ParserRuleContext ctx) {
+		if (ctx == null) return null;
 		return ctx.accept(vCalc);
 	}
 
@@ -56,11 +54,31 @@ public class Asm8051GenListener extends Asm8051BaseListener {
 		return result;
 	}
 
-	private int getInstrLocation(int instr) {
-		return 0; //TODO instr location finder
-	}
-
 	private class ValueCalculatorVisitor extends Asm8051BaseVisitor<Value<Asm8051GenListener>> {
+
+		@Override
+		public Value<Asm8051GenListener> visitConstant(Asm8051Parser.ConstantContext ctx) {
+			return new Value<Asm8051GenListener>() {
+				@Override
+				public void calculate(Asm8051GenListener context) throws MissingContextException {}
+
+				@Override
+				public void setCalculator(ContextCalculator<Asm8051GenListener> calculator) {}
+
+				@Override
+				public void setContext(Asm8051GenListener context) {}
+
+				@Override
+				public int getAsInt() {
+					return visitConstant(ctx).getAsInt();
+				}
+
+				@Override
+				public int getType() {
+					return 5;
+				}
+			};
+		}
 
 		@Override
 		public Value<Asm8051GenListener> visitConst_add(Asm8051Parser.Const_addContext ctx) {
@@ -111,7 +129,7 @@ public class Asm8051GenListener extends Asm8051BaseListener {
 		@Override
 		public Value<Asm8051GenListener> visitInstr_loc(Asm8051Parser.Instr_locContext ctx) {
 			final int instr = current_instr;
-			return new BaseValue((c) -> c.getInstrLocation(instr));
+			return SelfValue.INSTANCE; //TODO make it an constant not an runtime value!
 		}
 
 		@Override
@@ -132,5 +150,21 @@ public class Asm8051GenListener extends Asm8051BaseListener {
 			}
 			return null;
 		}
+	}
+
+	private class Phase2Listener extends Asm8051BaseListener {
+		private int current_instr2 = 0;
+
+		@Override
+		public void exitInstruction(Asm8051Parser.InstructionContext ctx) {
+			Value<Asm8051GenListener> param1 = getValue(ctx.parameter(0));
+			Value<Asm8051GenListener> param2 = getValue(ctx.parameter(1));
+			Value<Asm8051GenListener> param3 = getValue(ctx.parameter(2));
+
+			gen.createInstruction(ctx.instr().getText().toLowerCase(), param1, param2, param3, current_instr2);
+
+			current_instr2++;
+		}
+
 	}
 }

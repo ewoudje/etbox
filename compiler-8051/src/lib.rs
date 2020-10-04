@@ -1,7 +1,9 @@
 use crate::graph::InstructionGraph;
 use std::os::raw::c_char;
+use crate::instr::InstructionParameters;
 
 mod graph;
+mod instr;
 
 pub struct Compiler {
     graphs: Vec<graph::InstructionGraph>,
@@ -12,42 +14,64 @@ mod alloc {
     use std::mem::MaybeUninit;
     use super::Compiler;
 
-    pub static mut compiler: MaybeUninit<Compiler> = MaybeUninit::uninit();
+    pub static mut COMPILER: MaybeUninit<Compiler> = MaybeUninit::uninit();
 }
 
 
 #[no_mangle]
-pub unsafe extern "system" fn create_compiler(_env: JNIEnv, _class: JClass) -> &'static mut Compiler {
+pub unsafe fn create_compiler() -> &'static mut Compiler {
     use std::intrinsics::transmute;
 
-    *alloc::compiler.as_mut_ptr() = Compiler {
+    *alloc::COMPILER.as_mut_ptr() = Compiler {
         graphs: Vec::new(),
         current_graph: 0
     };
 
-    transmute(alloc::compiler.as_mut_ptr())
+    transmute(alloc::COMPILER.as_mut_ptr())
 }
 
 #[no_mangle]
-pub extern "system" fn new_origin(compiler: &mut Compiler,
+pub fn new_graph(compiler: &mut Compiler,
                                   pos: i32) {
     compiler.graphs.push(InstructionGraph::new(pos as u16));
     compiler.current_graph = compiler.graphs.len() - 1;
 }
 
 #[no_mangle]
-pub extern "system" fn instruction(compiler: &mut Compiler,
+pub fn instruction(compiler: &mut Compiler,
                                    instr: *const c_char,
                                    type1: i32, value1: i32,
                                    type2: i32, value2: i32,
-                                   type3: i32, value3: i32) {
+                                   type3: i32, value3: i32,
+                                   id: i32) {
 
     let instr: String = to_string(instr);
 
+    let p1 = (type1, value1).into();
+
+    let ins = instr::Instruction::from_str(instr.as_str(), p1, p2, p3).unwrap();
+
+    if ins.valid() {
+
+    } else {
+        unimplemented!()
+    }
 }
 
 fn to_string(pointer: *const c_char) -> String {
     use std::ffi::{CStr,CString};
     let slice = unsafe { CStr::from_ptr(pointer).to_bytes() };
-    str::from_utf8(slice).unwrap().to_string()
+    String::from_utf8_lossy(slice).to_string()
+}
+
+impl From<(i32, i32)> for InstructionParameters {
+
+    fn from(java: (i32, i32)) -> Self {
+        let (ty, value) = java;
+        match ty {
+            0 => InstructionParameters::Const(value as u16),
+            5 => InstructionParameters::Direct(value as u8),
+            _ => unimplemented!()
+        }
+    }
 }
