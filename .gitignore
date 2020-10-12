@@ -1,7 +1,9 @@
 # Project exclude paths
-/code-extension/node_modules/
-/code-extension/out/
 /target/
 /run/
 *.iml
 /.idea
+.vscode
+.settings
+.classpath
+.project

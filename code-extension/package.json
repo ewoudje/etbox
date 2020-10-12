@@ -5,7 +5,9 @@
   "publisher": "ewoudje",
   "main": "./out/extension",
   "scripts": {
-    "compile": "tsc -b"
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w"
   },
   "engines": {
     "vscode": "^1.43.0"
