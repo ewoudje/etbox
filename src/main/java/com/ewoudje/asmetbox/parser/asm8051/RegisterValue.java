@@ -65,4 +65,9 @@ public enum RegisterValue implements RuntimeValue {
 				throw new ArrayIndexOutOfBoundsException();
 		}
 	}
+
+	@Override
+	public int getType() {
+		return 2;
+	}
 }

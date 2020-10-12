@@ -3,8 +3,8 @@ package com.ewoudje.asmetbox.parser.asm8051;
 import com.ewoudje.asmetbox.AddressedBuffers;
 import com.ewoudje.asmetbox.parser.ContextCalculator;
 import com.ewoudje.asmetbox.parser.MissingContextException;
-import com.ewoudje.asmetbox.parser.RuntimeValue;
 import com.ewoudje.asmetbox.parser.Value;
+import jnr.ffi.LibraryLoader;
 
 /**
  * User: ewoudje
@@ -13,22 +13,11 @@ import com.ewoudje.asmetbox.parser.Value;
  */
 public class Asm8051RustGen implements Asm8051Generator {
 
+	private static final CompilerLib compilerLib = LibraryLoader.create(CompilerLib.class).load("compiler_8051");
+
 	private AddressedBuffers buffers = new AddressedBuffers();
-	private Value<Asm8051GenListener> origin;
-	private long rustPtr = create_compiler();
-
-	private static native long create_compiler();
-
-	private static native void new_origin(long ptr, int pos);
-
-	private static native void instruction(long ptr,
-										   int type1, int value1,
-										   int type2, int value2,
-										   int type3, int value3);
-
-	static {
-		System.loadLibrary("compiler_8051");
-	}
+	private int origin;
+	private long rustPtr = compilerLib.create_compiler();
 
 	public AddressedBuffers getResult() {
 		return buffers;
@@ -36,19 +25,22 @@ public class Asm8051RustGen implements Asm8051Generator {
 
 	@Override
 	public void setOrigin(Value<Asm8051GenListener> value) {
-		origin = value;
+		if (value.getAsInt() == origin) return;
+		origin = value.getAsInt();
+		compilerLib.new_graph(rustPtr,  origin);
 	}
 
 	@Override
-	public void createInstruction(String instr, Value<Asm8051GenListener> param1, Value<Asm8051GenListener> param2, Value<Asm8051GenListener> param3) {
+	public void createInstruction(String instr, Value<Asm8051GenListener> param1, Value<Asm8051GenListener> param2, Value<Asm8051GenListener> param3, int instr_id) {
 		if (param1 == null) param1 = new NoValue();
 		if (param2 == null) param2 = new NoValue();
 		if (param3 == null) param3 = new NoValue();
 
-		instruction(rustPtr,
+		compilerLib.instruction(rustPtr,
 				param1.getType(), param1.getAsInt(),
 				param2.getType(), param2.getAsInt(),
-				param3.getType(), param3.getAsInt());
+				param3.getType(), param3.getAsInt(),
+				instr_id);
 	}
 
 
@@ -78,5 +70,13 @@ public class Asm8051RustGen implements Asm8051Generator {
 		public int getAsInt() {
 			return -1;
 		}
+	}
+
+	public interface CompilerLib {
+		void instruction(long compiler, int type1, int value1, int type2, int value2, int type3, int value3, int instr_id);
+
+		long create_compiler();
+
+		void new_graph(long compiler, int origin);
 	}
 }
