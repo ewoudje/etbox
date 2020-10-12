@@ -8,7 +8,7 @@ mod instr;
 mod graph_builder;
 
 pub struct Compiler {
-    graphs: Vec<Rc<graph::InstructionGraph<instr::Instruction>>>,
+    graphs: Vec<graph::InstructionGraph>,
     current_graph: usize
 }
 

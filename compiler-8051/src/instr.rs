@@ -1,4 +1,10 @@
-use std::str::FromStr;
+#[derive(Clone, Eq, PartialEq)]
+pub struct Instruction {
+    opcode: Opcode,
+    par1: InstructionParameters,
+    par2: InstructionParameters,
+    par3: InstructionParameters
+}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum InstructionParameters {
@@ -7,92 +13,121 @@ pub enum InstructionParameters {
     PRi(bool),
     Const(u16),
     Direct(u8),
+    Rel(i8),
+    Instr(usize),
     None
 }
 
-struct InstructionNotFound {}
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct InstructionNotFound {}
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct OpcodeNotFound {}
 
-macro_rules! instr {
-    ($($instr:ident => ($(($p1:ident, $p2:ident, $p3:ident) $(=> $r:ident)?),+) $(=> $rt:ident)?),+) => {
-        pub enum Instruction {
-            $($instr(InstructionParameters, InstructionParameters, InstructionParameters)),+
+macro_rules! opcode {
+    ($($op:ident => ($(($p1:ident $(( $(| $p2:ident $(( $(| $p3:ident $(=> $r3:ident)?)+))? $(=> $r2:ident)?)+))? $(=> $r1:ident)?)),+)),+) => {
+        #[derive(Copy, Clone, Eq, PartialEq)]
+        pub enum Opcode {
+            $($op),+
         }
 
-        impl Instruction {
-            pub fn modifies(&self) -> InstructionParameters {
-                instr!(match impl (self) modifies ($($instr ($(($p1, $p2, $p3) $(=> $r)?),+) $(=> $rt)?),+) | unimplemented!())
-            }
-
-            pub fn valid(&self) -> bool {
-                instr!(match impl (self) valid ($($instr ($(($p1, $p2, $p3) $(=> $r)?),+) $(=> $rt)?),+) | false)
-            }
-
-            pub fn from_str(s: &str, p1: InstructionParameters, p2: InstructionParameters, p3: InstructionParameters) -> Result<Instruction, InstructionNotFound> {
-                match s {
-                    $(stringify!($instr) => Ok(Instruction::$instr(p1, p2, p3))),+,
-                    _ => Err(InstructionNotFound {})
+        impl Opcode {
+            pub fn from_str(string: &str) -> Result<Opcode, OpcodeNotFound> {
+                match string {
+                    $(stringify!($op) => Ok(Opcode::$op)),+,
+                    _ => Err(OpcodeNotFound {})
                 }
             }
 
+            pub fn make_instruction(self, par1: (i32, i32), par2: (i32, i32), par3: (i32, i32)) -> Result<Instruction, InstructionNotFound> {
+                let v = 0; //I have to make the compiler happy by adding a dummy variable
+                let (par1, (par2, par3)) = match self {
+                    $(Opcode::$op => match par1 {
+                        $((oppar!($p1)) => (oppar!(into $p1 v), some2!($(match par2 {
+                           $((oppar!($p2)) => (oppar!(into $p2 v), some!($(match par3 {
+                                $((oppar!($p3)) => oppar!(into $p3 v)),+,
+                                _ => return Err(InstructionNotFound {})
+                            })?))),+,
+                            _ => return Err(InstructionNotFound {})
+                        })?))),+,
+                        _ => return Err(InstructionNotFound {})
+                    }),+
+                };
+
+                Ok(Instruction {
+                    opcode: self,
+                    par1,
+                    par2,
+                    par3
+                })
+            }
         }
-    };
-
-    (full impl ($self:expr) modifies $instr:ident ($(($p1:ident, $p2:ident, $p3:ident) => $r:ident),+) | $st:stmt) => {
-        match $self {
-            $(
-                Instruction::$instr(InstructionParameters::$p1,InstructionParameters::$p2,InstructionParameters::$p3) => InstructionParameters::$r
-            ),+,
-            _ => { $st }
-        }
-    };
-
-    (full impl ($self:expr) valid $instr:ident ($(($p1:ident, $p2:ident, $p3:ident) => $r:ident),+) | $st:stmt) => {
-        match $self {
-            $(
-                Instruction::$instr(InstructionParameters::$p1,InstructionParameters::$p2,InstructionParameters::$p3) => true
-            ),+,
-            _ => { $st }
-        }
-    };
-
-    (impl ($self:expr) $i:ident $instr:ident ($(($p1:ident, $p2:ident, $p3:ident)),+) => $r:ident $(| $st:stmt)?) => {
-        instr!(r impl ($self) $i $instr ($(($p1, $p2, $p3) => $r),+) $(| $st)?)
-    };
-
-
-    (r impl ($self:expr) $i:ident $instr:ident ($(($p1:ident,$p2:ident,$p3:ident) => $r:ident),+) $(| $st:stmt)?) => {
-        instr!(full impl ($self) $i $instr ($(($p1, $p2, $p3) => $r),+) $(| $st)?)
-    };
-
-    (r impl ($self:expr) $i:ident $instr:ident ($(($p1:ident,$p2:ident,$p3:ident)),+) $(| $st:stmt)?) => {
-        instr!(full impl ($self) $i $instr ($(($p1, $p2, $p3) => None),+) $(| $st)?)
-    };
-
-    (match impl ($self:expr) $i:ident ($instr:ident ($(($($p1:ident $(,$p2:ident $(, $p3:ident)?)?)?) $(=> $r:ident)?),+) $(=> $rt:ident)? , $($instr2:ident ($(($($p12:ident $(,$p22:ident $(, $p32:ident)?)?)?)),+) $(=> $r2:ident)?),+) | $st:stmt) => {
-        instr!(impl ($self) $i $instr ($(($($p1 $(,$p2 $(, $p3)?)?)?) $(=> $r)?),+) $(=> $rt)? | instr!(match impl modifies $(($instr2 ($(($($p12 $(,$p22 $(, $p32)?)?)?) $(=> $r2)?),+) $(=> $r2)?)),*) | $st)
-    };
-
-    (match impl ($self:expr) $i:ident ($instr:ident ($(($($p1:ident $(,$p2:ident $(, $p3:ident)?)?)?) $(=> $r:ident)?),+) $(=> $rt:ident)?) | $st:stmt) => {
-        instr!(impl ($self) $i $instr ($(($($p1 $(,$p2 $(, $p3)?)?)?) $(=> $r)?),+) $(=> $rt)? | $st)
-    };
+    }
 }
 
 macro_rules! some {
-    ($p:ident) => ($p);
-    () => (None);
+    ($p:expr) => ($p);
+    () => (InstructionParameters::None);
 }
 
-instr!(
-    ADD => (
-       (A, Rn, None),
-       (A, Direct, None),
-       (A, PRi, None),
-       (A, Const, None)
-    ) => A
-);
+macro_rules! some2 {
+    ($p:expr) => ($p);
+    () => ((InstructionParameters::None, InstructionParameters::None));
+}
 
-/*
-pub fn reads(&self) -> (InstructionParameters, InstructionParameters, InstructionParameters) {
-                (self.0, self.1, self.2)
-            }
- */
+macro_rules! oppar {
+    (A) => {
+        (2, 1)
+    };
+    (Rn) => {
+        (2, v)
+    };
+    (Direct) => {
+        (1, v)
+    };
+    (PRi) => {
+        (3, v)
+    };
+    (Const) => {
+        (5, v)
+    };
+    (Rel) => {
+        (0, v)
+    };
+
+    (into A $v:ident) => {
+        InstructionParameters::A
+    };
+    (into Direct $v:ident) => {
+        InstructionParameters::Direct($v as u8)
+    };
+     (into Rn $v:ident) => {
+        InstructionParameters::Rn(($v - 3) as u8)
+    };
+    (into PRi $v:ident) => {
+        InstructionParameters::PRi($v == 1)
+    };
+    (into Const $v:ident) => {
+        InstructionParameters::Const($v as u16)
+    };
+    (into Rel $v:ident) => {
+        InstructionParameters::Instr($v as usize)
+    };
+}
+
+opcode!(
+    ADD => (
+       (A   (
+            | Rn
+            | Direct
+            | PRi
+            | Const
+            ) => A
+       )
+    ),
+    DJNZ => (
+        (A  (
+            | Rel
+            ) => A
+        )
+    )
+);
