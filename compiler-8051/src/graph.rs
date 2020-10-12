@@ -1,11 +1,28 @@
-pub struct InstructionGraph {
-    origin: u16,
+use std::rc::Rc;
+
+pub struct Graph<T> {
+    start: Rc<dyn GraphPoint<T>>,
 }
 
-impl InstructionGraph {
-    pub fn new(start: u16) -> InstructionGraph {
-        InstructionGraph {
-            origin: start
+impl<T> Graph<T> {
+    pub fn new<O: 'static>(start: Rc<dyn GraphPoint<T>>) -> InstructionGraph<T> {
+        Graph {
+            start
         }
     }
+}
+
+pub trait GraphPoint<T> {
+    fn line(&self) -> &GraphLine<T>;
+}
+
+pub struct GraphLine<T>(Rc<dyn GraphPoint<T>>, GraphBlockCollection<T>);
+
+type GraphBlockCollection<T> = Rc<Vec<Rc<GraphBlock<T>>>>;
+
+pub enum GraphBlock<T> {
+    Normal(T),
+    GraphReference(T, Rc<Graph<T>>),
+    Branch(T, Rc<dyn GraphPoint<T>>),
+    Goto(T, Rc<dyn GraphPoint<T>>)
 }

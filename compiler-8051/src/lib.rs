@@ -1,12 +1,14 @@
 use crate::graph::InstructionGraph;
 use std::os::raw::c_char;
+use std::rc::Rc;
 use crate::instr::InstructionParameters;
 
 mod graph;
 mod instr;
+mod graph_builder;
 
 pub struct Compiler {
-    graphs: Vec<graph::InstructionGraph>,
+    graphs: Vec<Rc<graph::InstructionGraph<instr::Instruction>>>,
     current_graph: usize
 }
 
