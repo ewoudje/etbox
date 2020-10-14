@@ -1,20 +1,26 @@
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub struct Instruction {
-    opcode: Opcode,
-    par1: InstructionParameters,
-    par2: InstructionParameters,
-    par3: InstructionParameters
+    pub opcode: Opcode,
+    pub par1: InstructionParameter,
+    pub par2: InstructionParameter,
+    pub par3: InstructionParameter
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum InstructionParameters {
+pub enum ReferenceType {
+    Branch,
+    Goto,
+    Call
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum InstructionParameter {
     A,
     Rn(u8),
     PRi(bool),
     Const(u16),
     Direct(u8),
-    Rel(i8),
-    Instr(usize),
+    Instr(usize, ReferenceType),
     None
 }
 
@@ -66,12 +72,12 @@ macro_rules! opcode {
 
 macro_rules! some {
     ($p:expr) => ($p);
-    () => (InstructionParameters::None);
+    () => (InstructionParameter::None);
 }
 
 macro_rules! some2 {
     ($p:expr) => ($p);
-    () => ((InstructionParameters::None, InstructionParameters::None));
+    () => ((InstructionParameter::None, InstructionParameter::None));
 }
 
 macro_rules! oppar {
@@ -90,27 +96,27 @@ macro_rules! oppar {
     (Const) => {
         (5, v)
     };
-    (Rel) => {
+    (RelB) => {
         (0, v)
     };
 
     (into A $v:ident) => {
-        InstructionParameters::A
+        InstructionParameter::A
     };
     (into Direct $v:ident) => {
-        InstructionParameters::Direct($v as u8)
+        InstructionParameter::Direct($v as u8)
     };
      (into Rn $v:ident) => {
-        InstructionParameters::Rn(($v - 3) as u8)
+        InstructionParameter::Rn(($v - 3) as u8)
     };
     (into PRi $v:ident) => {
-        InstructionParameters::PRi($v == 1)
+        InstructionParameter::PRi($v == 1)
     };
     (into Const $v:ident) => {
-        InstructionParameters::Const($v as u16)
+        InstructionParameter::Const($v as u16)
     };
-    (into Rel $v:ident) => {
-        InstructionParameters::Instr($v as usize)
+    (into RelB $v:ident) => {
+        InstructionParameter::Instr($v as usize, ReferenceType::Branch)
     };
 }
 
@@ -126,7 +132,7 @@ opcode!(
     ),
     DJNZ => (
         (A  (
-            | Rel
+            | RelB
             ) => A
         )
     )

@@ -1,15 +1,18 @@
 use crate::graph::Graph;
 use std::os::raw::c_char;
 use std::rc::Rc;
-use crate::instr::Instruction;
+use std::ops::Range;
 
 mod graph;
 mod instr;
 mod graph_builder;
 
+type Instruction = (instr::Instruction, usize);
+
 #[derive(Debug)]
 pub struct Compiler {
-    graphs: Vec<Rc<graph::Graph<Instruction>>>
+    graphs: Vec<(Vec<usize>, Rc<graph::Graph<Instruction>>)>,
+    current_graph: Option<graph_builder::GraphBuilder<Instruction, usize>>
 }
 
 mod alloc {
@@ -25,20 +28,22 @@ pub unsafe fn create_compiler() -> &'static mut Compiler {
     use std::intrinsics::transmute;
 
     *alloc::COMPILER.as_mut_ptr() = Compiler {
-        graphs: Vec::new()
+        graphs: Vec::new(),
+        current_graph: None
     };
 
     transmute(alloc::COMPILER.as_mut_ptr())
 }
 
 #[no_mangle]
-pub fn new_graph(pos: i32) -> usize {
-    let result = Box::new(graph_builder::GraphBuilder::<Instruction, usize>::new());
-    Box::into_raw(result) as usize
+pub fn new_graph(compiler: &mut Compiler, pos: i32) {
+    if let Some(graph) = compiler.current_graph.replace(graph_builder::GraphBuilder::new()) {
+        compiler.graphs.push(graph.build());
+    }
 }
 
 #[no_mangle]
-pub fn instruction(compiler: &mut Compiler, graph_builder: &mut graph_builder::GraphBuilder<Instruction, usize>, 
+pub fn instruction(compiler: &mut Compiler, 
                                    instr: *const c_char,
                                    type1: i32, value1: i32,
                                    type2: i32, value2: i32,
@@ -51,7 +56,7 @@ pub fn instruction(compiler: &mut Compiler, graph_builder: &mut graph_builder::G
 
     let ins = opcode.make_instruction((type1, value1), (type2, value2), (type3, value3)).unwrap();
 
-    graph_builder.add(ins, compiler);
+    compiler.current_graph.unwrap().add((ins, id as usize), compiler);
 }
 
 fn to_string(pointer: *const c_char) -> String {
@@ -61,5 +66,33 @@ fn to_string(pointer: *const c_char) -> String {
 }
 
 impl graph_builder::Graphifier<Instruction, usize> for Compiler {
-    //TODO
+    fn refered(&self, data: Instruction) -> Option<usize> {
+        Some(data.1)
+    }
+
+    fn branch(&self, data: Instruction) -> Option<usize> {
+        [data.0.par1, data.0.par2, data.0.par3].iter().find(|p| match p {
+            instr::InstructionParameter::Instr(_, instr::ReferenceType::Branch) => true,
+            _ => false
+        }).map(|p| { if let instr::InstructionParameter::Instr(r, _) = p { Some(*r) } else { None }})
+        .flatten()
+    }
+
+    fn goto(&self, data: Instruction) -> Option<usize> {
+        [data.0.par1, data.0.par2, data.0.par3].iter().find(|p| match p {
+            instr::InstructionParameter::Instr(_, instr::ReferenceType::Goto) => true,
+            _ => false
+        }).map(|p| { if let instr::InstructionParameter::Instr(r, _) = p { Some(*r) } else { None }})
+        .flatten()
+    }
+
+    fn graph_reference(&self, data: Instruction) -> Option<Rc<Graph<Instruction>>> {
+        [data.0.par1, data.0.par2, data.0.par3].iter().find(|p| match p {
+            instr::InstructionParameter::Instr(_, instr::ReferenceType::Call) => true,
+            _ => false
+        }).map(|p| { if let instr::InstructionParameter::Instr(r, _) = p { Some(*r) } else { None }})
+        .flatten().map(|id| {
+            self.graphs.iter().find(|g| g.0.contains(&id)).map(|r| r.1.clone())
+        }).flatten()
+    }
 }

@@ -6,7 +6,7 @@ pub struct Graph<T> {
 }
 
 impl<T> Graph<T> {
-    pub fn new<O: 'static>(start: Rc<dyn GraphPoint<T>>) -> Graph<T> {
+    pub fn new(start: Rc<dyn GraphPoint<T>>) -> Graph<T> {
         Graph {
             start
         }

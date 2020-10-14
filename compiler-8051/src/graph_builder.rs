@@ -3,13 +3,14 @@ use std::fmt::Debug;
 use std::ops::FnMut;
 use std::rc::Rc;
 
-pub struct GraphBuilder<'a, T, R: Eq> {
+#[derive(Debug)]
+pub struct GraphBuilder<T, R: Eq> {
     references: Vec<(R, usize)>,
-    building_blocks: Vec<BuildBlock<'a, T>>,
+    building_blocks: Vec<BuildBlock<T>>,
 }
 
-impl<'a, T: 'static + Debug, R: Eq + Debug + 'static> GraphBuilder<'a, T, R> {
-    pub fn new() -> GraphBuilder<'a, T, R> {
+impl<T: 'static + Debug + Copy, R: Eq + Debug + 'static> GraphBuilder<T, R> {
+    pub fn new() -> GraphBuilder<T, R> {
         GraphBuilder {
             references: Vec::new(),
             building_blocks: Vec::new(),
@@ -20,7 +21,7 @@ impl<'a, T: 'static + Debug, R: Eq + Debug + 'static> GraphBuilder<'a, T, R> {
         let mut result = None;
         let referd = graphif.refered(data);
 
-        fn once_or_panic<K, O>(i: Option<K>, call: impl FnMut(K) -> O, result: &mut Option<O>) {
+        fn once_or_panic<K, O>(i: Option<K>, call: &mut impl FnMut(K) -> O, result: &mut Option<O>) {
             if let Some(i) = i {
                 if result.is_some() {
                     panic!("Graphifier gave 2 commandos to 1 T");
@@ -32,10 +33,10 @@ impl<'a, T: 'static + Debug, R: Eq + Debug + 'static> GraphBuilder<'a, T, R> {
 
         once_or_panic(
             graphif.branch(data),
-            |branch| {
-                if Some(branch) == referd {
+            &mut |branch| {
+                if Some(&branch) == referd.as_ref() {
                     self.building_blocks
-                        .push(BuildBlock::Point(&mut |l| Rc::new(GeneralPoint::new(l))))
+                        .push(BuildBlock::Point(Box::new(|l| Rc::new(GeneralPoint::new(l)))))
                 }
 
                 GraphBlock::Branch(data, Rc::new(GraphPointReference::new(branch)))
@@ -45,10 +46,10 @@ impl<'a, T: 'static + Debug, R: Eq + Debug + 'static> GraphBuilder<'a, T, R> {
 
         once_or_panic(
             graphif.goto(data),
-            |goto| {
-                if Some(goto) == referd {
+            &mut |goto| {
+                if Some(&goto) == referd.as_ref() {
                     self.building_blocks
-                        .push(BuildBlock::Point(&mut |l| Rc::new(GeneralPoint::new(l))))
+                        .push(BuildBlock::Point(Box::new(|l| Rc::new(GeneralPoint::new(l)))))
                 }
 
                 GraphBlock::Branch(data, Rc::new(GraphPointReference::new(goto)))
@@ -58,7 +59,7 @@ impl<'a, T: 'static + Debug, R: Eq + Debug + 'static> GraphBuilder<'a, T, R> {
 
         once_or_panic(
             graphif.graph_reference(data),
-            |graph| GraphBlock::GraphReference(data, graph),
+            &mut |graph| GraphBlock::GraphReference(data, graph),
             &mut result,
         );
 
@@ -68,6 +69,13 @@ impl<'a, T: 'static + Debug, R: Eq + Debug + 'static> GraphBuilder<'a, T, R> {
         if let Some(r) = referd {
             self.references.push((r, self.building_blocks.len() - 1));
         }
+    }
+
+    pub fn build(self) -> (Vec<R>, Rc<Graph<T>>) {
+        let refs = self.references.into_iter().map(|r| r.0).collect();
+        let start;
+
+        (refs, Rc::new(Graph::new(start)))
     }
 }
 
@@ -126,23 +134,26 @@ impl<R: Eq> GraphPointReference<R> {
         GraphPointReference(r)
     }
 
-    fn resolve<T>(&self, gb: &GraphBuilder<T, R>, line: GraphLine<T>) -> Rc<dyn GraphPoint<T>> {
-        let point = gb
-            .references
+    fn resolve<T>(&self, gb: &Vec<(R, Rc<dyn GraphPoint<T>>)>, line: GraphLine<T>) -> Rc<dyn GraphPoint<T>> {
+        let (_, point) = gb
             .iter()
             .find(|r| r.0 == self.0)
-            .map(|r| match gb.building_blocks.get(r.1).unwrap() {
-                BuildBlock::Point(r) => Some(r),
-                _ => None,
-            })
-            .flatten()
             .unwrap();
 
-        point(line)
+        point.clone()
     }
 }
 
-enum BuildBlock<'a, T> {
+enum BuildBlock<T> {
     Block(Rc<GraphBlock<T>>),
-    Point(&'a mut dyn FnMut(GraphLine<T>) -> Rc<dyn GraphPoint<T>>),
+    Point(Box<dyn FnMut(GraphLine<T>) -> Rc<dyn GraphPoint<T>>>),
+}
+
+impl<T> Debug for BuildBlock<T> {
+    fn fmt(&self,  f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({})", match self {
+            BuildBlock::Point(_) => "Point",
+            BuildBlock::Block(_) => "Block"
+        })
+    }
 }
