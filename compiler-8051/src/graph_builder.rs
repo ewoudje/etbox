@@ -8,7 +8,7 @@ pub struct GraphBuilder<'a, T, R: Eq> {
     building_blocks: Vec<BuildBlock<'a, T>>,
 }
 
-impl<'a, T: 'static, R: Eq + 'static> GraphBuilder<'a, T, R> {
+impl<'a, T: 'static + Debug, R: Eq + Debug + 'static> GraphBuilder<'a, T, R> {
     pub fn new() -> GraphBuilder<'a, T, R> {
         GraphBuilder {
             references: Vec::new(),
@@ -16,7 +16,7 @@ impl<'a, T: 'static, R: Eq + 'static> GraphBuilder<'a, T, R> {
         }
     }
 
-    pub fn add(&mut self, data: T, graphif: impl Graphifier<T, R>) {
+    pub fn add(&mut self, data: T, graphif: &impl Graphifier<T, R>) {
         let mut result = None;
         let referd = graphif.refered(data);
 
@@ -81,9 +81,10 @@ pub trait Graphifier<T, R>: Debug {
     fn graph_reference(&self, data: T) -> Option<Rc<Graph<T>>>;
 }
 
+#[derive(Debug)]
 struct StartGraphPoint<O, T>(O, GraphLine<T>);
 
-impl<O, T> GraphPoint<T> for StartGraphPoint<O, T> {
+impl<O: Debug, T: Debug> GraphPoint<T> for StartGraphPoint<O, T> {
     fn line(&self) -> &GraphLine<T> {
         &self.1
     }
@@ -95,6 +96,7 @@ impl<O, T> StartGraphPoint<O, T> {
     }
 }
 
+#[derive(Debug)]
 struct GeneralPoint<T>(GraphLine<T>);
 
 impl<T> GeneralPoint<T> {
@@ -103,15 +105,16 @@ impl<T> GeneralPoint<T> {
     }
 }
 
-impl<T> GraphPoint<T> for GeneralPoint<T> {
+impl<T: Debug> GraphPoint<T> for GeneralPoint<T> {
     fn line(&self) -> &GraphLine<T> {
         &self.0
     }
 }
 
+#[derive(Debug)]
 struct GraphPointReference<R>(R);
 
-impl<T, R> GraphPoint<T> for GraphPointReference<R> {
+impl<T: Debug, R: Debug> GraphPoint<T> for GraphPointReference<R> {
     fn line(&self) -> &GraphLine<T> {
         panic!("Trying to acces a graph point reference this shouldn't happen.\n
                 This is only used in graph_builder and should be later replaced with correct graphPoints")

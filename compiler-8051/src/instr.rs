@@ -1,4 +1,4 @@
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct Instruction {
     opcode: Opcode,
     par1: InstructionParameters,
@@ -6,7 +6,7 @@ pub struct Instruction {
     par3: InstructionParameters
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum InstructionParameters {
     A,
     Rn(u8),
@@ -25,7 +25,7 @@ pub struct OpcodeNotFound {}
 
 macro_rules! opcode {
     ($($op:ident => ($(($p1:ident $(( $(| $p2:ident $(( $(| $p3:ident $(=> $r3:ident)?)+))? $(=> $r2:ident)?)+))? $(=> $r1:ident)?)),+)),+) => {
-        #[derive(Copy, Clone, Eq, PartialEq)]
+        #[derive(Copy, Clone, Eq, PartialEq, Debug)]
         pub enum Opcode {
             $($op),+
         }
