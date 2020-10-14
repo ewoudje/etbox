@@ -5,7 +5,7 @@ pub struct Graph<T> {
 }
 
 impl<T> Graph<T> {
-    pub fn new<O: 'static>(start: Rc<dyn GraphPoint<T>>) -> InstructionGraph<T> {
+    pub fn new<O: 'static>(start: Rc<dyn GraphPoint<T>>) -> Graph<T> {
         Graph {
             start
         }
@@ -18,7 +18,7 @@ pub trait GraphPoint<T> {
 
 pub struct GraphLine<T>(Rc<dyn GraphPoint<T>>, GraphBlockCollection<T>);
 
-type GraphBlockCollection<T> = Rc<Vec<Rc<GraphBlock<T>>>>;
+pub type GraphBlockCollection<T> = Rc<Vec<Rc<GraphBlock<T>>>>;
 
 pub enum GraphBlock<T> {
     Normal(T),
